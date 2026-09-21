@@ -1,27 +1,43 @@
 #!/usr/bin/env bash
 
-export CHECKUPDATES_DB="/tmp/checkup-db-${UID}-$$" 
-trap "rm -rf $CHECKUPDATES_DB" EXIT
-declare tooltip
+export CHECKUPDATES_DB="/tmp/checkup-db-${UID}-$$"
+trap 'rm -rf -- "$CHECKUPDATES_DB"' EXIT
 
-# Parse updates
-if ! checkupdates > /dev/null; then
-    tooltip+="\r<span weight='bold'>No updates!</span>\r"
-else
-    readarray -t updates <<< "$(checkupdates --nocolor)"
-    tooltip+="\r"
+mapfile -t updates < <(checkupdates --nocolor 2>/tmp/checkupdates-error)
 
-    # Create tooltip
-    for i in "${updates[@]}"; do
-        tooltip+=$(echo "$i" | awk "{
-            printf \"<span weight='bold'>\" \$1 \"</span>\"
-            printf \"<span weight='bold' color='red'> \" \$2 \" </span>\"
-            printf \"->\"
-            printf \"<span weight='bold' color='green'> \" \$4 \" </span>\\r\"
-        }")
-    done
+if (( ${#updates[@]} == 0 )); then
+    error=$(< /tmp/checkupdates-error)
+
+    if [[ -n "$error" ]]; then
+        jq -cn --arg error "$error" '{
+            text: "?",
+            tooltip: $error
+        }'
+    else
+        jq -cn '{
+            text: "0x",
+            tooltip: "<span weight=\"bold\">No updates!</span>"
+        }'
+    fi
+
+    exit 0
 fi
 
-# Print as JSON
-echo "{\"text\": \"$(checkupdates | wc -l)x\", \"tooltip\": \"$tooltip\"}"
+tooltip=""
 
+for update in "${updates[@]}"; do
+    read -r package old_version _ new_version <<< "$update"
+
+    tooltip+="<span weight=\"bold\">${package}</span>"
+    tooltip+=" <span weight=\"bold\" foreground=\"red\">${old_version}</span>"
+    tooltip+=" → "
+    tooltip+="<span weight=\"bold\" foreground=\"green\">${new_version}</span>"
+    tooltip+=$'\n'
+done
+
+count=${#updates[@]}
+
+jq -cn \
+    --arg text "${count}x" \
+    --arg tooltip "$tooltip" \
+    '{text: $text, tooltip: $tooltip}'
