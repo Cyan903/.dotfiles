@@ -455,5 +455,6 @@ environment {
     QT_QPA_PLATFORM "xcb"
     QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
     QT_IM_MODULES "wayland;fcitx;ibus"
+    NIRI_SCREENSHARE_PICKER "1"
 }
 
